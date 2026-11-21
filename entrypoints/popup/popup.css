@@ -1,0 +1,96 @@
+/* Nur was das Popup zusätzlich braucht; Farben und Bausteine kommen aus jobpilot.css */
+
+body {
+  width: 380px;
+  margin: 0;
+  background: var(--jp-background);
+  color: var(--jp-text);
+  font-family: var(--jp-font-sans);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.popup-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--jp-border);
+}
+
+.popup-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+}
+
+.popup-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.popup-body p {
+  margin: 0;
+}
+
+.popup-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--jp-border);
+  font-size: 12px;
+  color: var(--jp-text-secondary);
+}
+
+.popup-footer span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popup-body .jp-field {
+  margin-bottom: 0;
+}
+
+.popup-body .jp-input {
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.popup-body .jp-button {
+  min-height: 42px;
+}
+
+.popup-small {
+  font-size: 12px;
+  line-height: 17px;
+}
+
+.password-input {
+  position: relative;
+  display: flex;
+
+  & .jp-input {
+    flex: 1;
+    padding-right: 44px;
+  }
+}
+
+.password-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--jp-text-secondary);
+  cursor: pointer;
+}

@@ -1,3 +1,46 @@
-# WXT + React
+# jobpilot – Browser-Extension
 
-This template should help get you started developing with React in WXT.
+Merkt interessante Stellenanzeigen mit einem Klick in jobpilot. Die Stelle landet als Bewerbung mit
+Status „Gemerkt“ in der zentralen Supabase-Datenbank (`../backend`) und erscheint damit sofort in
+mobile-app, web-app und desktop-app.
+
+## Ablauf
+
+1. Auf einer Stellenanzeige das jobpilot-Symbol anklicken (beim ersten Mal anmelden – dasselbe Konto
+   wie in den Apps).
+2. Die Extension liest die geöffnete Seite – erst dann, nicht vorher (`activeTab`, keine
+   Host-Berechtigungen):
+   - **ohne KI** aus den strukturierten Daten der Seite (schema.org `JobPosting` als JSON-LD, das
+     viele Jobbörsen und Karriereseiten einbetten): Firma, Stelle, Ort, Gehalt, Anzeigentext;
+   - fehlt etwas, auf Wunsch **mit KI** über die Edge Function `job-import` mit dem eigenen KI-Key
+     (Zustimmung `ai.consent` wie in den Apps). Markierter Text hat Vorrang vor dem ganzen Seitentext.
+3. Vorschau prüfen, ggf. korrigieren, „Stelle merken“. Ist dieselbe Adresse (ohne Tracking-Parameter)
+   schon gespeichert, erscheint ein Hinweis statt einer Dublette.
+
+Den Anzeigentext speichert die Extension in `applications.job_description` – Grundlage für den
+geplanten Zuschnitt des Lebenslaufs auf eine Stelle.
+
+## Aufbau
+
+- `entrypoints/popup/` – Popup (React): Anmeldung, Vorschau, Speichern
+- `lib/job-posting.ts` – reine Logik (JSON-LD lesen, HTML → Text, Entwurf, Prüfung), getestet in
+  `lib/__tests__/`
+- `lib/page-reader.ts` – liest die Seite per `scripting.executeScript`
+- `lib/jobpilot.ts` – Supabase-Client (Sitzung in `storage.local`), Speichern, Dublettenprüfung,
+  Aufruf von `job-import`
+- `assets/jobpilot.css` – byte-gleiche Kopie der Design-Datei der Apps
+
+## Befehle
+
+```bash
+npm run dev              # Chrome mit geladener Extension und Hot Reload
+npm run dev:firefox      # dasselbe in Firefox
+npm run check            # Typecheck + Tests – vor "fertig"
+npm test                 # vitest
+npm run build            # .output/chrome-mv3 (in Chrome: Erweiterungen → Entwicklermodus → „Entpackte Erweiterung laden“)
+npm run build:firefox    # .output/firefox-mv2 (about:debugging → „Temporäres Add-on laden“)
+npm run zip              # ZIP für den Chrome Web Store
+```
+
+Supabase-Instanz über `.env` (`WXT_SUPABASE_URL`, `WXT_SUPABASE_PUBLISHABLE_KEY`, Vorlage
+`.env.example`); ohne `.env` das gehostete Projekt `dev`.
