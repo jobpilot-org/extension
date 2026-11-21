@@ -289,10 +289,35 @@ export function draftFromPage(snapshot: PageSnapshot): { draft: JobDraft; struct
   return { draft, structured: true };
 }
 
+/** Überschrift, nach der bei Jobbörsen die eigentliche Beschreibung beginnt */
+const DESCRIPTION_START =
+  /^(vollständige stellenbeschreibung|full job description|über den job|about the job|stellenbeschreibung im detail)$/i;
+
+/** Bedienelemente und Kopfzeilen der Jobbörsen, die nicht zur Anzeige gehören */
+const CHROME_LINE =
+  /^(return to search results?|zurück zu den suchergebnissen|job post details|mit indeed bewerben|apply (now|with indeed)|jetzt bewerben|einfach bewerben|easy apply|diesen job melden|report (this )?job|informationen zur anzeigentransparenz|·|\d([.,]\d)?)$/i;
+
+/**
+ * Entfernt Kopf und Bedienelemente der Jobbörse aus dem gelesenen Text. Hängt an sichtbaren Texten
+ * statt an Klassennamen, weil diese sich seltener ändern. Bleibt nach dem Schnitt zu wenig übrig,
+ * gilt der ganze Text.
+ */
+export function stripBoardChrome(text: string) {
+  const lines = text.split('\n');
+  const start = lines.findIndex((line) => DESCRIPTION_START.test(line.trim()));
+  const body = start >= 0 ? lines.slice(start + 1) : lines;
+  const cleaned = body
+    .filter((line) => !CHROME_LINE.test(line.trim()))
+    .join('\n')
+    .trim();
+  return cleaned.length >= MIN_POSTING_CHARS ? cleaned : text;
+}
+
 /** Text der Anzeige: markierter Text, sonst der Seitentext – gekürzt auf die Grenze der Edge Function */
 export function postingText(snapshot: PageSnapshot) {
   const selection = snapshot.selection.trim();
-  const chosen = selection.length >= MIN_POSTING_CHARS ? selection : snapshot.text.trim();
+  const chosen =
+    selection.length >= MIN_POSTING_CHARS ? selection : stripBoardChrome(snapshot.text.trim());
   return chosen
     .replace(/[ \t ]+/g, ' ')
     .replace(/\n\s*\n\s*(\n\s*)+/g, '\n\n')

@@ -10,6 +10,7 @@ import {
   parseJobImport,
   parseSalary,
   postingText,
+  stripBoardChrome,
   sourceFromUrl,
   toApplicationColumns,
   today,
@@ -278,5 +279,49 @@ describe('Hilfen', () => {
       salary_max: null,
       job_description: null,
     });
+  });
+});
+
+describe('stripBoardChrome', () => {
+  const indeed = [
+    'Return to Search Result',
+    'Job Post Details',
+    'Senior Software & App Engineer (m/w/d)',
+    'FLH Media Digital',
+    '·',
+    '4.3',
+    'Ismaning',
+    'Vollzeit',
+    'Mit Indeed bewerben',
+    'Stellenbeschreibung',
+    'Keine Gehaltsinformationen angegeben',
+    'Vollständige Stellenbeschreibung',
+    'Kurzbeschreibung der Stelle',
+    'Rolle: Verantwortung für die technische Weiterentwicklung moderner Software-, Web- und Mobile-Anwendungen',
+    '',
+    'Dein Profil',
+    'Diesen Job melden',
+    'Informationen zur Anzeigentransparenz',
+    'Return to Search Result',
+  ].join('\n');
+
+  it('beginnt nach „Vollständige Stellenbeschreibung“ und entfernt Bedienelemente', () => {
+    expect(stripBoardChrome(indeed)).toBe(
+      'Kurzbeschreibung der Stelle\nRolle: Verantwortung für die technische Weiterentwicklung moderner Software-, Web- und Mobile-Anwendungen\n\nDein Profil',
+    );
+  });
+
+  it('lässt Text ohne Marke bis auf Bedienelemente stehen und behält zu kurze Reste', () => {
+    const plain = `Mit Indeed bewerben\n${'Aufgaben '.repeat(20)}\nDiesen Job melden`;
+    expect(stripBoardChrome(plain)).toBe('Aufgaben '.repeat(20).trim());
+    expect(stripBoardChrome('Vollständige Stellenbeschreibung\nkurz')).toBe(
+      'Vollständige Stellenbeschreibung\nkurz',
+    );
+  });
+
+  it('wirkt im Entwurf, aber nicht auf markierten Text', () => {
+    expect(postingText(page({ text: indeed }))).toMatch(/^Kurzbeschreibung der Stelle/);
+    const selection = `Mit Indeed bewerben\n${'Markiert '.repeat(20)}`;
+    expect(postingText(page({ text: indeed, selection }))).toBe(selection.trim());
   });
 });

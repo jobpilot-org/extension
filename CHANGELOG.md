@@ -4,6 +4,13 @@ Versionen nach [SemVer](https://semver.org/lang/de/): neue Funktion → MINOR, F
 PATCH. Unter 1.0 noch nicht offiziell veröffentlicht. Die Version steht in `package.json` (WXT
 übernimmt sie ins Manifest) und oben rechts im Popup.
 
+## 0.2.2 – 2026-11-21
+
+- Anzeigentext ohne Kopf und Bedienelemente der Jobbörse: Er beginnt nach „Vollständige
+  Stellenbeschreibung“ (bzw. „Über den Job“, „Full job description“); Zeilen wie „Return to Search
+  Result“, „Mit Indeed bewerben“, Bewertung oder „Diesen Job melden“ fallen weg. Markierter Text
+  bleibt unverändert.
+
 ## 0.2.1 – 2026-11-21
 
 - Indeed/LinkedIn: Der Anzeigentext enthält nur noch die Stellenbeschreibung – ohne „Return to
