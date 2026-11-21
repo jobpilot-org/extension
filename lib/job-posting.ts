@@ -49,6 +49,14 @@ export const SITE_SELECTORS = {
     '.jobs-search__job-details',
     '.job-view-layout',
   ],
+  /** Nur die Stellenbeschreibung innerhalb des Bereichs – ohne Kopf, Bewerben-Knopf, „Job melden“ */
+  description: [
+    '#jobDescriptionText',
+    '.jobsearch-jobDescriptionText',
+    '.jobs-description__content',
+    '.jobs-box__html-content',
+    '#job-details',
+  ],
   title: [
     '[data-testid="jobsearch-JobInfoHeader-title"]',
     '.jobsearch-JobInfoHeader-title',

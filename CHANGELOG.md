@@ -4,6 +4,11 @@ Versionen nach [SemVer](https://semver.org/lang/de/): neue Funktion → MINOR, F
 PATCH. Unter 1.0 noch nicht offiziell veröffentlicht. Die Version steht in `package.json` (WXT
 übernimmt sie ins Manifest) und oben rechts im Popup.
 
+## 0.2.1 – 2026-11-21
+
+- Indeed/LinkedIn: Der Anzeigentext enthält nur noch die Stellenbeschreibung – ohne „Return to
+  Search Result“, „Mit Indeed bewerben“, Bewertung oder „Diesen Job melden“.
+
 ## 0.2.0 – 2026-11-21
 
 - Indeed und LinkedIn: In der geteilten Ansicht (Trefferliste links, Anzeige rechts) wird nur die

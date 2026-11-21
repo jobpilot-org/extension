@@ -19,15 +19,22 @@ describe('readPage', () => {
       <main>
         <ul id="mosaic-jobResults"><li>Schnellbewerbung AI Consultant Franklin Institute ${filler('Liste')}</li></ul>
         <div id="jobsearch-ViewjobPaneWrapper">
+          <a>Return to Search Result</a>
           <h2 data-testid="jobsearch-JobInfoHeader-title">Senior Software &amp; App Engineer (m/w/d)<span> - job post</span></h2>
           <div data-testid="inlineHeader-companyName"><a>FLH Media Digital</a></div>
           <div data-testid="inlineHeader-companyLocation">Ismaning</div>
+          <button>Mit Indeed bewerben</button>
           <div id="jobDescriptionText">${filler('Anzeige')}</div>
+          <button>Diesen Job melden</button>
         </div>
       </main>`;
     const snapshot = readPage(SITE_SELECTORS);
     expect(snapshot.text).toContain('Anzeige');
     expect(snapshot.text).not.toContain('Liste');
+    // Nur die Beschreibung, ohne Bedienelemente der Börse
+    for (const chrome of ['Return to Search Result', 'Mit Indeed bewerben', 'Diesen Job melden', 'FLH']) {
+      expect(snapshot.text).not.toContain(chrome);
+    }
     expect(snapshot.hints).toEqual({
       title: 'Senior Software & App Engineer (m/w/d) - job post',
       company: 'FLH Media Digital',
@@ -52,5 +59,19 @@ describe('readPage', () => {
     const snapshot = readPage(SITE_SELECTORS);
     expect(snapshot.text).toContain('Haupt');
     expect(snapshot.jsonLd).toEqual(['{"@type":"JobPosting"}']);
+  });
+});
+
+describe('readPage ohne gesonderte Beschreibung', () => {
+  it('nimmt den ganzen Anzeigenbereich, wenn die Beschreibung zu kurz ist', () => {
+    document.body.innerHTML = `
+      <div class="jobs-search__job-details">
+        <h1 class="job-details-jobs-unified-top-card__job-title">Dev</h1>
+        <div id="job-details">kurz</div>
+        <p>${'Bereich '.repeat(60)}</p>
+      </div>`;
+    const snapshot = readPage(SITE_SELECTORS);
+    expect(snapshot.text).toContain('Bereich');
+    expect(snapshot.hints?.title).toBe('Dev');
   });
 });

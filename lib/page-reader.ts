@@ -25,9 +25,19 @@ export function readPage(selectors: SiteSelectors): PageSnapshot {
       break;
     }
   }
-  const main = visible(document.querySelector('main, [role="main"], article'));
-  const text = region ? visible(region) : main.length >= 500 ? main : visible(document.body);
   const root = region ?? document;
+  // Innerhalb des Bereichs nur die Beschreibung, wenn die Börse sie gesondert auszeichnet
+  let description = '';
+  for (const selector of selectors.description) {
+    const text = visible(root.querySelector(selector));
+    if (text.length >= 200) {
+      description = text;
+      break;
+    }
+  }
+  const main = visible(document.querySelector('main, [role="main"], article'));
+  const text =
+    description || (region ? visible(region) : main.length >= 500 ? main : visible(document.body));
   return {
     url: location.href,
     title: document.title,
