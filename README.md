@@ -12,6 +12,11 @@ mobile-app, web-app und desktop-app.
    Host-Berechtigungen):
    - **ohne KI** aus den strukturierten Daten der Seite (schema.org `JobPosting` als JSON-LD, das
      viele Jobbörsen und Karriereseiten einbetten): Firma, Stelle, Ort, Gehalt, Anzeigentext;
+   - bei Jobbörsen mit geteilter Ansicht (Indeed, LinkedIn: Trefferliste links, Anzeige rechts)
+     nur den **Anzeigenbereich** und daraus Titel, Firma und Ort (`SITE_SELECTORS` in
+     `lib/job-posting.ts`); gespeichert wird die feste Adresse der Anzeige (Indeed
+     `/viewjob?jk=…`, LinkedIn `/jobs/view/<id>/`) statt der Suchseite. Ändern die Börsen ihren
+     Seitenaufbau, greift wieder der Hauptbereich bzw. die KI – dann die Selektoren anpassen;
    - fehlt etwas, auf Wunsch **mit KI** über die Edge Function `job-import` mit dem eigenen KI-Key
      (Zustimmung `ai.consent` wie in den Apps). Markierter Text hat Vorrang vor dem ganzen Seitentext.
 3. Vorschau prüfen, ggf. korrigieren, „Stelle merken“. Ist dieselbe Adresse (ohne Tracking-Parameter)

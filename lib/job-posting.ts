@@ -23,9 +23,51 @@ export type PageSnapshot = {
   selection: string;
   /** Inhalt aller `<script type="application/ld+json">` */
   jsonLd: string[];
-  /** Sichtbarer Text des Hauptbereichs bzw. der ganzen Seite */
+  /** Sichtbarer Text des Anzeigenbereichs, sonst des Hauptbereichs bzw. der ganzen Seite */
   text: string;
+  /** Eckdaten aus bekannten Elementen der Jobbörse (siehe `SITE_SELECTORS`), soweit gefunden */
+  hints?: PageHints;
 };
+
+export type PageHints = { title?: string; company?: string; location?: string };
+
+/**
+ * Bekannte Bereiche großer Jobbörsen. Bei geteilten Ansichten (Trefferliste links, Anzeige rechts –
+ * Indeed, LinkedIn) steht die Anzeige nur in einem Teil der Seite; ohne diese Auswahl landet die
+ * ganze Trefferliste im Anzeigentext. Die Selektoren hängen am Aufbau fremder Seiten und können
+ * veralten – dann greift wieder der Hauptbereich bzw. die KI.
+ */
+export const SITE_SELECTORS = {
+  detail: [
+    // Indeed: rechter Bereich der Suche, eigene Anzeigenseite
+    '#jobsearch-ViewjobPaneWrapper',
+    '.jobsearch-RightPane',
+    '.jobsearch-ViewJobLayout-jobDisplay',
+    '#viewJobSSRRoot',
+    // LinkedIn: rechter Bereich der Jobsuche, eigene Anzeigenseite
+    '.jobs-search__job-details--container',
+    '.jobs-search__job-details',
+    '.job-view-layout',
+  ],
+  title: [
+    '[data-testid="jobsearch-JobInfoHeader-title"]',
+    '.jobsearch-JobInfoHeader-title',
+    '.job-details-jobs-unified-top-card__job-title',
+    '.jobs-unified-top-card__job-title',
+  ],
+  company: [
+    '[data-testid="inlineHeader-companyName"]',
+    '[data-company-name="true"]',
+    '.job-details-jobs-unified-top-card__company-name',
+    '.jobs-unified-top-card__company-name',
+  ],
+  location: [
+    '[data-testid="inlineHeader-companyLocation"]',
+    '[data-testid="job-location"]',
+    '[data-testid="jobsearch-JobInfoHeader-companyLocation"]',
+  ],
+};
+export type SiteSelectors = typeof SITE_SELECTORS;
 
 export type JobDraft = {
   company: string;
@@ -212,12 +254,18 @@ export function draftFromJobPosting(posting: Json, url: string): JobDraft {
   };
 }
 
-/** Leerer Entwurf, wenn die Seite keine strukturierten Daten hat */
+/** Indeed hängt an den Titel unsichtbaren Text für Screenreader an, z. B. „- job post“ */
+function cleanTitle(title: string) {
+  return title.replace(/\s*[-–]\s*(job post|stellenanzeige|stellenangebot)\s*$/i, '').trim();
+}
+
+/** Entwurf ohne strukturierte Daten: Eckdaten aus bekannten Elementen der Seite, sonst leer */
 export function emptyDraft(snapshot: PageSnapshot): JobDraft {
+  const hints = snapshot.hints ?? {};
   return {
-    company: '',
-    role: '',
-    location: '',
+    company: hints.company?.trim() ?? '',
+    role: cleanTitle(hints.title ?? ''),
+    location: hints.location?.trim() ?? '',
     source: sourceFromUrl(snapshot.url),
     jobUrl: normalizeJobUrl(snapshot.url),
     jobDescription: postingText(snapshot),
@@ -311,9 +359,28 @@ export function sourceFromUrl(url: string): string | undefined {
 
 const TRACKING_PARAM = /^(utm_|trk|ref|refid|tracking|src$|source$|campaign|gclid|fbclid|mc_)/i;
 
+/**
+ * Feste Adresse der Anzeige bei Jobbörsen, die sie in einer Such- oder Listenansicht zeigen:
+ * Indeed `?vjk=…`/`?jk=…` → `/viewjob?jk=…`, LinkedIn `?currentJobId=…` → `/jobs/view/…/`.
+ */
+function canonicalJobUrl(parsed: URL): URL | undefined {
+  const host = parsed.hostname;
+  if (/(^|\.)indeed\./.test(host)) {
+    const id = parsed.searchParams.get('jk') ?? parsed.searchParams.get('vjk');
+    if (id && /^[0-9a-f]+$/i.test(id)) return new URL(`/viewjob?jk=${id}`, parsed.origin);
+  }
+  if (/(^|\.)linkedin\./.test(host)) {
+    const id = parsed.searchParams.get('currentJobId') ?? parsed.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d+)/)?.[1];
+    if (id && /^\d+$/.test(id)) return new URL(`/jobs/view/${id}/`, 'https://www.linkedin.com');
+  }
+  return undefined;
+}
+
 /** Adresse ohne Sprungmarke und Tracking-Parameter – damit dieselbe Anzeige als Dublette erkannt wird */
 export function normalizeJobUrl(url: string) {
   try {
+    const canonical = canonicalJobUrl(new URL(url));
+    if (canonical) return canonical.toString();
     const parsed = new URL(url);
     parsed.hash = '';
     for (const key of [...parsed.searchParams.keys()]) {

@@ -1,17 +1,33 @@
 import { browser } from 'wxt/browser';
 
-import type { PageSnapshot } from './job-posting';
+import { SITE_SELECTORS, type PageSnapshot, type SiteSelectors } from './job-posting';
 
 /**
  * Läuft per `scripting.executeScript` in der geöffneten Seite – muss deshalb ohne Importe und
- * äußere Variablen auskommen. Liest nur, schreibt nichts.
+ * äußere Variablen auskommen; die Selektoren kommen als Argument. Liest nur, schreibt nichts.
  */
-function readPage(): PageSnapshot {
+export function readPage(selectors: SiteSelectors): PageSnapshot {
   const visible = (element: Element | null) =>
     element instanceof HTMLElement ? element.innerText.trim() : '';
-  // Hauptbereich ohne Navigation und Fußzeile, wenn die Seite einen sinnvollen hat
+  const first = (root: ParentNode, list: string[]) => {
+    for (const selector of list) {
+      const text = visible(root.querySelector(selector));
+      if (text) return text.split('\n')[0]!.trim();
+    }
+    return undefined;
+  };
+  // Anzeigenbereich bekannter Jobbörsen, sonst Hauptbereich ohne Navigation und Fußzeile
+  let region: Element | null = null;
+  for (const selector of selectors.detail) {
+    const element = document.querySelector(selector);
+    if (visible(element).length >= 200) {
+      region = element;
+      break;
+    }
+  }
   const main = visible(document.querySelector('main, [role="main"], article'));
-  const text = main.length >= 500 ? main : visible(document.body);
+  const text = region ? visible(region) : main.length >= 500 ? main : visible(document.body);
+  const root = region ?? document;
   return {
     url: location.href,
     title: document.title,
@@ -20,6 +36,11 @@ function readPage(): PageSnapshot {
       (script.textContent ?? '').slice(0, 200_000),
     ),
     text: text.slice(0, 50_000),
+    hints: {
+      title: first(root, selectors.title),
+      company: first(root, selectors.company),
+      location: first(root, selectors.location),
+    },
   };
 }
 
@@ -32,7 +53,11 @@ export async function readActiveTab(): Promise<PageSnapshot> {
     throw new PageReadError('Diese Seite kann jobpilot nicht lesen. Öffne eine Stellenanzeige im Web.');
   }
   try {
-    const [result] = await browser.scripting.executeScript({ target: { tabId: tab.id }, func: readPage });
+    const [result] = await browser.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: readPage,
+      args: [SITE_SELECTORS],
+    });
     const snapshot = result?.result as PageSnapshot | undefined;
     if (!snapshot) throw new Error('leer');
     return snapshot;

@@ -135,6 +135,30 @@ describe('draftFromPage', () => {
   });
 });
 
+describe('Eckdaten aus der Seite', () => {
+  it('nimmt Titel, Firma und Ort aus den Hinweisen – dann reicht es ohne KI', () => {
+    const { draft, structured } = draftFromPage(
+      page({
+        url: 'https://de.indeed.com/?vjk=01de8d4f6df77be3',
+        hints: {
+          title: 'Senior Software & App Engineer (m/w/d) - job post',
+          company: ' FLH Media Digital ',
+          location: 'Ismaning',
+        },
+      }),
+    );
+    expect(structured).toBe(false);
+    expect(draft).toMatchObject({
+      role: 'Senior Software & App Engineer (m/w/d)',
+      company: 'FLH Media Digital',
+      location: 'Ismaning',
+      source: 'Indeed',
+      jobUrl: 'https://de.indeed.com/viewjob?jk=01de8d4f6df77be3',
+    });
+    expect(isComplete(draft)).toBe(true);
+  });
+});
+
 describe('mergeJobImport', () => {
   const job = parseJobImport({
     company: 'KI GmbH',
@@ -190,6 +214,25 @@ describe('Hilfen', () => {
     expect(sourceFromUrl('https://www.karriere.acme.de/job')).toBe('karriere.acme.de');
     expect(sourceFromUrl('chrome://extensions')).toBeUndefined();
     expect(sourceFromUrl('kein link')).toBeUndefined();
+  });
+
+  it('bildet die feste Adresse bei Indeed und LinkedIn', () => {
+    expect(normalizeJobUrl('https://de.indeed.com/?vjk=01de8d4f6df77be3')).toBe(
+      'https://de.indeed.com/viewjob?jk=01de8d4f6df77be3',
+    );
+    expect(normalizeJobUrl('https://de.indeed.com/jobs?q=dev&l=M%C3%BCnchen&vjk=abc123&from=x')).toBe(
+      'https://de.indeed.com/viewjob?jk=abc123',
+    );
+    expect(normalizeJobUrl('https://de.indeed.com/viewjob?jk=abc123&tk=1&from=serp')).toBe(
+      'https://de.indeed.com/viewjob?jk=abc123',
+    );
+    expect(normalizeJobUrl('https://de.indeed.com/?vjk=<script>')).toBe('https://de.indeed.com/?vjk=%3Cscript%3E');
+    expect(normalizeJobUrl('https://www.linkedin.com/jobs/search/?currentJobId=4012345678&keywords=dev')).toBe(
+      'https://www.linkedin.com/jobs/view/4012345678/',
+    );
+    expect(normalizeJobUrl('https://de.linkedin.com/jobs/view/senior-dev-at-acme-4012345678?trk=x')).toBe(
+      'https://www.linkedin.com/jobs/view/4012345678/',
+    );
   });
 
   it('entfernt Tracking aus der Adresse', () => {

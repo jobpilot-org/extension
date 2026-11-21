@@ -172,7 +172,7 @@ type Ai =
 type Step =
   | { kind: 'reading' }
   | { kind: 'error'; message: string }
-  | { kind: 'form'; base: JobDraft; structured: boolean; existing?: SavedApplication }
+  | { kind: 'form'; base: JobDraft; existing?: SavedApplication }
   | { kind: 'saved'; company: string; role: string };
 
 /** Stelle aus dem aktiven Tab lesen, prüfen lassen und als Bewerbung „Gemerkt“ speichern */
@@ -189,11 +189,11 @@ function Capture() {
     let active = true;
     void (async () => {
       try {
-        const { draft, structured } = draftFromPage(await readActiveTab());
+        const { draft } = draftFromPage(await readActiveTab());
         const existing = await findByUrl(draft.jobUrl);
         if (!active) return;
         setForm(toForm(draft));
-        setStep({ kind: 'form', base: draft, structured, existing });
+        setStep({ kind: 'form', base: draft, existing });
       } catch (e) {
         if (active) setStep({ kind: 'error', message: message(e) });
       }
@@ -235,7 +235,7 @@ function Capture() {
   }
   if (!form) return null;
 
-  const { base, structured, existing } = step;
+  const { base, existing } = step;
   const update = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const complete = isComplete(toDraft(form, base));
 
@@ -307,7 +307,7 @@ function Capture() {
 
   return (
     <form className="popup-body" onSubmit={(event) => void save(event)} noValidate>
-      {structured && complete && ai.kind === 'idle' && (
+      {complete && ai.kind === 'idle' && (
         <p className="jp-muted popup-small">
           Aus den Daten der Seite übernommen – ohne KI. Bitte kurz prüfen.
         </p>
