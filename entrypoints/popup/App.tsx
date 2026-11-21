@@ -16,14 +16,19 @@ import {
   type WorkMode,
 } from '@/lib/job-posting';
 import {
-  findByUrl,
+  DUPLICATE_REASON_LABELS,
+  findDuplicates,
+  type DuplicateMatch,
+  type ExistingApplication,
+} from '@/lib/duplicates';
+import {
+  listApplications,
   giveAiConsent,
   hasAiConsent,
   importJob,
   saveJob,
   signIn,
   supabase,
-  type SavedApplication,
 } from '@/lib/jobpilot';
 import { readActiveTab } from '@/lib/page-reader';
 
@@ -176,7 +181,7 @@ type Ai =
 type Step =
   | { kind: 'reading' }
   | { kind: 'error'; message: string }
-  | { kind: 'form'; base: JobDraft; existing?: SavedApplication }
+  | { kind: 'form'; base: JobDraft; applications: ExistingApplication[] }
   | { kind: 'saved'; company: string; role: string };
 
 /** Stelle aus dem aktiven Tab lesen, prüfen lassen und als Bewerbung „Gemerkt“ speichern */
@@ -185,7 +190,9 @@ function Capture() {
   const [form, setForm] = useState<Form>();
   const [errors, setErrors] = useState<DraftErrors>({});
   const [ai, setAi] = useState<Ai>({ kind: 'idle' });
-  const [showDuplicate, setShowDuplicate] = useState(false);
+  // Treffer der Dublettenprüfung; gesetzt = Hinweis statt Formular, bis „Trotzdem neu merken“
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>();
+  const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
 
@@ -194,10 +201,12 @@ function Capture() {
     void (async () => {
       try {
         const { draft } = draftFromPage(await readActiveTab());
-        const existing = await findByUrl(draft.jobUrl);
+        const applications = await listApplications();
         if (!active) return;
         setForm(toForm(draft));
-        setStep({ kind: 'form', base: draft, existing });
+        setStep({ kind: 'form', base: draft, applications });
+        const matches = findDuplicates(draft, applications);
+        if (matches.length) setDuplicates(matches);
       } catch (e) {
         if (active) setStep({ kind: 'error', message: message(e) });
       }
@@ -239,7 +248,7 @@ function Capture() {
   }
   if (!form) return null;
 
-  const { base, existing } = step;
+  const { base, applications } = step;
   const update = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const complete = isComplete(toDraft(form, base));
 
@@ -275,6 +284,14 @@ function Capture() {
     const found = validateDraft(draft);
     setErrors(found);
     if (Object.keys(found).length) return;
+    // Erneut prüfen – Firma oder Stelle können im Formular geändert worden sein
+    if (!confirmed) {
+      const matches = findDuplicates(draft, applications);
+      if (matches.length) {
+        setDuplicates(matches);
+        return;
+      }
+    }
     setSaving(true);
     setSaveError(undefined);
     try {
@@ -288,22 +305,36 @@ function Capture() {
     }
   }
 
-  if (existing && !showDuplicate) {
+  if (duplicates && !confirmed) {
     return (
       <div className="popup-body">
         <div className="jp-callout">
-          <p className="jp-eyebrow">Schon in jobpilot</p>
-          <p>
-            <strong>{existing.company}</strong> · {existing.role}
+          <p className="jp-eyebrow">Schon in jobpilot?</p>
+          <p className="popup-small">
+            {duplicates.length === 1
+              ? 'Diese Stelle ist vermutlich schon erfasst:'
+              : `Diese Stelle ist vermutlich schon ${duplicates.length}-mal erfasst:`}
           </p>
-          <p className="popup-small">Status: {STATUS_LABELS[existing.status] ?? existing.status}</p>
+          {duplicates.map(({ application, reason }) => (
+            <p key={application.id} className="popup-small">
+              <strong>
+                {application.company} · {application.role}
+              </strong>
+              <br />
+              {STATUS_LABELS[application.status] ?? application.status} ·{' '}
+              {DUPLICATE_REASON_LABELS[reason]}
+            </p>
+          ))}
         </div>
         <button
           type="button"
           className="jp-button jp-button--secondary"
-          onClick={() => setShowDuplicate(true)}
+          onClick={() => setConfirmed(true)}
         >
           Trotzdem neu merken
+        </button>
+        <button type="button" className="jp-button" onClick={() => window.close()}>
+          Schließen
         </button>
       </div>
     );

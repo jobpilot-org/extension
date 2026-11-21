@@ -19,8 +19,10 @@ mobile-app, web-app und desktop-app.
      Seitenaufbau, greift wieder der Hauptbereich bzw. die KI – dann die Selektoren anpassen;
    - fehlt etwas, auf Wunsch **mit KI** über die Edge Function `job-import` mit dem eigenen KI-Key
      (Zustimmung `ai.consent` wie in den Apps). Markierter Text hat Vorrang vor dem ganzen Seitentext.
-3. Vorschau prüfen, ggf. korrigieren, „Stelle merken“. Ist dieselbe Adresse (ohne Tracking-Parameter)
-   schon gespeichert, erscheint ein Hinweis statt einer Dublette.
+3. Vorschau prüfen, ggf. korrigieren, „Stelle merken“. Ist die Stelle schon erfasst – gleiche
+   Adresse, gleiche Firma + Position oder gleiche Firma mit fast gleichem Anzeigentext
+   (`lib/duplicates.ts`, Kopie von `desktop-app/src/domain/duplicates.ts`) –, erscheint ein Hinweis
+   statt einer Dublette.
 
 Den Anzeigentext speichert die Extension in `applications.job_description` – Grundlage für den
 geplanten Zuschnitt des Lebenslaufs auf eine Stelle.

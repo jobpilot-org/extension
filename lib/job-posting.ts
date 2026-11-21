@@ -3,6 +3,10 @@
 // `JobPosting` als JSON-LD, das viele Jobbörsen und Karriereseiten einbetten), sonst ergänzt um das
 // Ergebnis der Edge Function `job-import` (backend/supabase/functions/job-import).
 
+import { normalizeJobUrl } from './duplicates';
+
+export { normalizeJobUrl };
+
 /** Grenzen wie in der Edge Function `job-import` und `src/domain/ai.ts` der mobile-app */
 export const MIN_POSTING_CHARS = 80;
 export const MAX_POSTING_CHARS = 20_000;
@@ -388,41 +392,6 @@ export function sourceFromUrl(url: string): string | undefined {
     return undefined;
   }
   return KNOWN_SOURCES.find(([pattern]) => pattern.test(host))?.[1] ?? host;
-}
-
-const TRACKING_PARAM = /^(utm_|trk|ref|refid|tracking|src$|source$|campaign|gclid|fbclid|mc_)/i;
-
-/**
- * Feste Adresse der Anzeige bei Jobbörsen, die sie in einer Such- oder Listenansicht zeigen:
- * Indeed `?vjk=…`/`?jk=…` → `/viewjob?jk=…`, LinkedIn `?currentJobId=…` → `/jobs/view/…/`.
- */
-function canonicalJobUrl(parsed: URL): URL | undefined {
-  const host = parsed.hostname;
-  if (/(^|\.)indeed\./.test(host)) {
-    const id = parsed.searchParams.get('jk') ?? parsed.searchParams.get('vjk');
-    if (id && /^[0-9a-f]+$/i.test(id)) return new URL(`/viewjob?jk=${id}`, parsed.origin);
-  }
-  if (/(^|\.)linkedin\./.test(host)) {
-    const id = parsed.searchParams.get('currentJobId') ?? parsed.pathname.match(/\/jobs\/view\/(?:[^/]*-)?(\d+)/)?.[1];
-    if (id && /^\d+$/.test(id)) return new URL(`/jobs/view/${id}/`, 'https://www.linkedin.com');
-  }
-  return undefined;
-}
-
-/** Adresse ohne Sprungmarke und Tracking-Parameter – damit dieselbe Anzeige als Dublette erkannt wird */
-export function normalizeJobUrl(url: string) {
-  try {
-    const canonical = canonicalJobUrl(new URL(url));
-    if (canonical) return canonical.toString();
-    const parsed = new URL(url);
-    parsed.hash = '';
-    for (const key of [...parsed.searchParams.keys()]) {
-      if (TRACKING_PARAM.test(key)) parsed.searchParams.delete(key);
-    }
-    return parsed.toString();
-  } catch {
-    return url;
-  }
 }
 
 /** Kalendertag (YYYY-MM-DD) in lokaler Zeit – bei „Gemerkt“ der Tag des Merkens */

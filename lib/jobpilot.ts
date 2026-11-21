@@ -1,6 +1,7 @@
 import { createClient, FunctionsHttpError } from '@supabase/supabase-js';
 import { browser } from 'wxt/browser';
 
+import type { ApplicationStatus, ExistingApplication } from './duplicates';
 import { parseJobImport, toApplicationColumns, today, type JobDraft, type JobImport } from './job-posting';
 
 // Zugriff auf die zentrale Supabase-Datenbank (backend/). Standard ist das gehostete Projekt `dev`;
@@ -32,18 +33,22 @@ export async function signIn(email: string, password: string) {
   throw new Error('Die Anmeldung hat nicht geklappt. Bitte später noch einmal versuchen.');
 }
 
-export type SavedApplication = { id: string; company: string; role: string; status: string };
-
-/** Schon gemerkte oder laufende Bewerbung zur selben Adresse (ohne gelöschte) */
-export async function findByUrl(jobUrl: string): Promise<SavedApplication | undefined> {
+/** Nicht gelöschte Bewerbungen des Nutzers – Grundlage der Dublettenprüfung */
+export async function listApplications(): Promise<ExistingApplication[]> {
   const { data, error } = await supabase
     .from('applications')
-    .select('id, company, role, status')
-    .eq('job_url', jobUrl)
-    .is('archived_at', null)
-    .limit(1);
+    .select('id, company, role, status, applied_at, job_url, job_description')
+    .is('archived_at', null);
   if (error) throw new Error('Bewerbungen ließen sich nicht laden.');
-  return data[0];
+  return data.map((row) => ({
+    id: row.id as string,
+    company: row.company as string,
+    role: row.role as string,
+    status: row.status as ApplicationStatus,
+    appliedAt: row.applied_at as string,
+    jobUrl: (row.job_url as string | null) ?? undefined,
+    jobDescription: (row.job_description as string | null) ?? undefined,
+  }));
 }
 
 /** Legt die Bewerbung mit Status „Gemerkt“ an, dazu den Ansprechpartner aus der Anzeige */
