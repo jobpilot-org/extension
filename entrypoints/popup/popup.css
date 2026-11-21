@@ -18,6 +18,12 @@ body {
   border-bottom: 1px solid var(--jp-border);
 }
 
+.popup-version {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--jp-text-secondary);
+}
+
 .popup-icon {
   width: 28px;
   height: 28px;

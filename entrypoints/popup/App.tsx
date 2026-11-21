@@ -1,5 +1,6 @@
 import type { Session } from '@supabase/supabase-js';
 import { useEffect, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react';
+import { browser } from 'wxt/browser';
 
 import {
   draftFromPage,
@@ -58,6 +59,9 @@ export default function App() {
         <img className="popup-icon" src="/icon/96.png" alt="" />
         <span className="jp-brand">
           jobpilot<span className="jp-brand__dot">.</span>
+        </span>
+        <span className="popup-version" title="Version der Extension">
+          v{browser.runtime.getManifest().version}
         </span>
       </header>
       {session === undefined ? null : session ? (
