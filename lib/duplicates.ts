@@ -1,31 +1,7 @@
-
-// Dublettenprüfung: Ist eine Stelle schon als Bewerbung erfasst? Geprüft wird gegen die nicht
-// gelöschten Bewerbungen des Nutzers – über die Adresse der Anzeige, über Firma + Position und über
+// Dublettenprüfung: Ist eine Stelle schon erfasst (als Stellenangebot oder Bewerbung)? Geprüft wird
+// gegen die Einträge des Nutzers – über die Adresse der Anzeige, über Firma + Position und über
 // Firma + sehr ähnlichen Anzeigentext (falls die Position umbenannt wurde). Kopie von
-// `desktop-app/src/domain/duplicates.ts` (nur die Typen sind hier eigene); Änderungen in beiden
-// nachziehen.
-
-/** Status wie in `domain/application.ts` der Apps */
-export type ApplicationStatus =
-  | 'saved'
-  | 'applied'
-  | 'screening'
-  | 'interview'
-  | 'final'
-  | 'offer'
-  | 'rejected'
-  | 'withdrawn';
-
-/** Was die Prüfung von einer vorhandenen Bewerbung braucht */
-export type ExistingApplication = {
-  id: string;
-  company: string;
-  role: string;
-  status: ApplicationStatus;
-  appliedAt: string;
-  jobUrl?: string;
-  jobDescription?: string;
-};
+// `desktop-app/src/domain/duplicates.ts`; Änderungen in beiden nachziehen.
 
 /** Was von einer neuen Stelle bekannt ist */
 export type DuplicateCandidate = {
@@ -37,8 +13,17 @@ export type DuplicateCandidate = {
 
 export type DuplicateReason = 'url' | 'company-role' | 'company-description';
 
-export type DuplicateMatch = {
-  application: Pick<ExistingApplication, 'id' | 'company' | 'role' | 'status' | 'appliedAt'>;
+/** Was die Prüfung von einem vorhandenen Eintrag (Bewerbung oder Stellenangebot) braucht */
+export type DuplicateTarget = {
+  id: string;
+  company: string;
+  role: string;
+  jobUrl?: string;
+  jobDescription?: string;
+};
+
+export type DuplicateMatch<T extends DuplicateTarget = DuplicateTarget> = {
+  item: T;
   reason: DuplicateReason;
 };
 
@@ -142,41 +127,39 @@ const SIMILAR_TEXT = 0.6;
 const MIN_TEXT_CHARS = 200;
 
 /**
- * Bewerbungen, die dieselbe Stelle sein dürften – sicherste Treffer zuerst, je Bewerbung nur der
- * stärkste Grund. `existing` sind die nicht gelöschten Bewerbungen; `ignoreId` die gerade
- * bearbeitete.
+ * Einträge, die dieselbe Stelle sein dürften – sicherste Treffer zuerst, je Eintrag nur der
+ * stärkste Grund. `existing` sind z. B. die nicht gelöschten Bewerbungen oder die Stellenangebote;
+ * `ignoreId` der gerade bearbeitete Eintrag.
  */
-export function findDuplicates(
+export function findDuplicates<T extends DuplicateTarget>(
   candidate: DuplicateCandidate,
-  existing: readonly ExistingApplication[],
+  existing: readonly T[],
   ignoreId?: string,
-): DuplicateMatch[] {
+): DuplicateMatch<T>[] {
   const url = candidate.jobUrl?.trim() ? urlKey(candidate.jobUrl) : undefined;
   const company = companyKey(candidate.company);
   const role = roleKey(candidate.role);
   const text = candidate.jobDescription?.trim() ?? '';
   const order: DuplicateReason[] = ['url', 'company-role', 'company-description'];
-  const matches: DuplicateMatch[] = [];
+  const matches: DuplicateMatch<T>[] = [];
 
-  for (const application of existing) {
-    if (application.id === ignoreId) continue;
+  for (const item of existing) {
+    if (item.id === ignoreId) continue;
     let reason: DuplicateReason | undefined;
-    if (url && application.jobUrl?.trim() && urlKey(application.jobUrl) === url) {
+    if (url && item.jobUrl?.trim() && urlKey(item.jobUrl) === url) {
       reason = 'url';
-    } else if (company && companyKey(application.company) === company) {
-      if (role && roleKey(application.role) === role) {
+    } else if (company && companyKey(item.company) === company) {
+      if (role && roleKey(item.role) === role) {
         reason = 'company-role';
       } else if (
         text.length >= MIN_TEXT_CHARS &&
-        (application.jobDescription?.length ?? 0) >= MIN_TEXT_CHARS &&
-        textSimilarity(text, application.jobDescription!) >= SIMILAR_TEXT
+        (item.jobDescription?.length ?? 0) >= MIN_TEXT_CHARS &&
+        textSimilarity(text, item.jobDescription!) >= SIMILAR_TEXT
       ) {
         reason = 'company-description';
       }
     }
-    if (!reason) continue;
-    const { id, company: c, role: r, status, appliedAt } = application;
-    matches.push({ application: { id, company: c, role: r, status, appliedAt }, reason });
+    if (reason) matches.push({ item, reason });
   }
   return matches.sort((a, b) => order.indexOf(a.reason) - order.indexOf(b.reason));
 }

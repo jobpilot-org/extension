@@ -19,32 +19,21 @@ import {
   DUPLICATE_REASON_LABELS,
   findDuplicates,
   type DuplicateMatch,
-  type ExistingApplication,
 } from '@/lib/duplicates';
 import {
-  listApplications,
+  listExisting,
   giveAiConsent,
   hasAiConsent,
   importJob,
   saveJob,
   signIn,
   supabase,
+  type ExistingEntry,
 } from '@/lib/jobpilot';
 import { readActiveTab } from '@/lib/page-reader';
 
 const CONSENT_TEXT =
   'Zum Auslesen wird der Text dieser Seite an den jobpilot-Server gesendet und von dort mit deinem eigenen KI-Key an den KI-Anbieter (Anthropic) weitergeleitet. Gespeichert wird dabei nichts.';
-
-const STATUS_LABELS: Record<string, string> = {
-  saved: 'Gemerkt',
-  applied: 'Beworben',
-  screening: 'Screening',
-  interview: 'Fachgespräch',
-  final: 'Finale Runde',
-  offer: 'Angebot',
-  rejected: 'Abgesagt',
-  withdrawn: 'Zurückgezogen',
-};
 
 const message = (error: unknown) =>
   error instanceof Error ? error.message : 'Etwas ist schiefgelaufen. Bitte noch einmal versuchen.';
@@ -181,17 +170,17 @@ type Ai =
 type Step =
   | { kind: 'reading' }
   | { kind: 'error'; message: string }
-  | { kind: 'form'; base: JobDraft; applications: ExistingApplication[] }
+  | { kind: 'form'; base: JobDraft; existing: ExistingEntry[] }
   | { kind: 'saved'; company: string; role: string };
 
-/** Stelle aus dem aktiven Tab lesen, prüfen lassen und als Bewerbung „Gemerkt“ speichern */
+/** Stelle aus dem aktiven Tab lesen, prüfen lassen und als Stellenangebot speichern */
 function Capture() {
   const [step, setStep] = useState<Step>({ kind: 'reading' });
   const [form, setForm] = useState<Form>();
   const [errors, setErrors] = useState<DraftErrors>({});
   const [ai, setAi] = useState<Ai>({ kind: 'idle' });
-  // Treffer der Dublettenprüfung; gesetzt = Hinweis statt Formular, bis „Trotzdem neu merken“
-  const [duplicates, setDuplicates] = useState<DuplicateMatch[]>();
+  // Treffer der Dublettenprüfung; gesetzt = Hinweis statt Formular, bis „Trotzdem speichern“
+  const [duplicates, setDuplicates] = useState<DuplicateMatch<ExistingEntry>[]>();
   const [confirmed, setConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
@@ -201,11 +190,11 @@ function Capture() {
     void (async () => {
       try {
         const { draft } = draftFromPage(await readActiveTab());
-        const applications = await listApplications();
+        const existing = await listExisting();
         if (!active) return;
         setForm(toForm(draft));
-        setStep({ kind: 'form', base: draft, applications });
-        const matches = findDuplicates(draft, applications);
+        setStep({ kind: 'form', base: draft, existing });
+        const matches = findDuplicates(draft, existing);
         if (matches.length) setDuplicates(matches);
       } catch (e) {
         if (active) setStep({ kind: 'error', message: message(e) });
@@ -234,12 +223,15 @@ function Capture() {
     return (
       <div className="popup-body">
         <div className="jp-callout">
-          <p className="jp-eyebrow">Gemerkt ✓</p>
+          <p className="jp-eyebrow">Gespeichert ✓</p>
           <p>
             <strong>{step.company}</strong> · {step.role}
           </p>
         </div>
-        <p className="jp-muted">Die Stelle steht jetzt in allen jobpilot-Apps unter „Gemerkt“.</p>
+        <p className="jp-muted">
+          Das Stellenangebot steht jetzt in jobpilot unter „Stellenangebote“. Wenn du dich bewirbst,
+          machst du dort eine Bewerbung daraus.
+        </p>
         <button type="button" className="jp-button" onClick={() => window.close()}>
           Schließen
         </button>
@@ -248,7 +240,7 @@ function Capture() {
   }
   if (!form) return null;
 
-  const { base, applications } = step;
+  const { base, existing } = step;
   const update = (patch: Partial<Form>) => setForm({ ...form, ...patch });
   const complete = isComplete(toDraft(form, base));
 
@@ -286,7 +278,7 @@ function Capture() {
     if (Object.keys(found).length) return;
     // Erneut prüfen – Firma oder Stelle können im Formular geändert worden sein
     if (!confirmed) {
-      const matches = findDuplicates(draft, applications);
+      const matches = findDuplicates(draft, existing);
       if (matches.length) {
         setDuplicates(matches);
         return;
@@ -315,14 +307,13 @@ function Capture() {
               ? 'Diese Stelle ist vermutlich schon erfasst:'
               : `Diese Stelle ist vermutlich schon ${duplicates.length}-mal erfasst:`}
           </p>
-          {duplicates.map(({ application, reason }) => (
-            <p key={application.id} className="popup-small">
+          {duplicates.map(({ item, reason }) => (
+            <p key={item.id} className="popup-small">
               <strong>
-                {application.company} · {application.role}
+                {item.company} · {item.role}
               </strong>
               <br />
-              {STATUS_LABELS[application.status] ?? application.status} ·{' '}
-              {DUPLICATE_REASON_LABELS[reason]}
+              {item.label} · {DUPLICATE_REASON_LABELS[reason]}
             </p>
           ))}
         </div>
@@ -331,7 +322,7 @@ function Capture() {
           className="jp-button jp-button--secondary"
           onClick={() => setConfirmed(true)}
         >
-          Trotzdem neu merken
+          Trotzdem speichern
         </button>
         <button type="button" className="jp-button" onClick={() => window.close()}>
           Schließen
@@ -457,7 +448,7 @@ function Capture() {
       </Field>
       {saveError && <p className="jp-error">{saveError}</p>}
       <button type="submit" className="jp-button" disabled={saving || ai.kind === 'running'}>
-        Stelle merken
+        Stellenangebot speichern
       </button>
     </form>
   );

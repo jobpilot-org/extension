@@ -1,8 +1,8 @@
 import { createClient, FunctionsHttpError } from '@supabase/supabase-js';
 import { browser } from 'wxt/browser';
 
-import type { ApplicationStatus, ExistingApplication } from './duplicates';
-import { parseJobImport, toApplicationColumns, today, type JobDraft, type JobImport } from './job-posting';
+import type { DuplicateTarget } from './duplicates';
+import { parseJobImport, toPostingColumns, type JobDraft, type JobImport } from './job-posting';
 
 // Zugriff auf die zentrale Supabase-Datenbank (backend/). Standard ist das gehostete Projekt `dev`;
 // eine andere Instanz (z. B. die lokale) über WXT_SUPABASE_URL und WXT_SUPABASE_PUBLISHABLE_KEY in
@@ -33,39 +33,65 @@ export async function signIn(email: string, password: string) {
   throw new Error('Die Anmeldung hat nicht geklappt. Bitte später noch einmal versuchen.');
 }
 
-/** Nicht gelöschte Bewerbungen des Nutzers – Grundlage der Dublettenprüfung */
-export async function listApplications(): Promise<ExistingApplication[]> {
-  const { data, error } = await supabase
-    .from('applications')
-    .select('id, company, role, status, applied_at, job_url, job_description')
-    .is('archived_at', null);
-  if (error) throw new Error('Bewerbungen ließen sich nicht laden.');
-  return data.map((row) => ({
-    id: row.id as string,
-    company: row.company as string,
-    role: row.role as string,
-    status: row.status as ApplicationStatus,
-    appliedAt: row.applied_at as string,
-    jobUrl: (row.job_url as string | null) ?? undefined,
-    jobDescription: (row.job_description as string | null) ?? undefined,
-  }));
+const STATUS_LABELS: Record<string, string> = {
+  saved: 'Gemerkt',
+  applied: 'Beworben',
+  screening: 'Screening',
+  interview: 'Fachgespräch',
+  final: 'Finale Runde',
+  offer: 'Angebot',
+  rejected: 'Abgesagt',
+  withdrawn: 'Zurückgezogen',
+};
+
+/** Vorhandener Eintrag für die Dublettenprüfung, mit Anzeigetext wie „Bewerbung · Beworben“ */
+export type ExistingEntry = DuplicateTarget & { label: string };
+
+/**
+ * Stellenangebote und nicht gelöschte Bewerbungen des Nutzers – dieselbe Stelle kann schon als das
+ * eine oder das andere erfasst sein.
+ */
+export async function listExisting(): Promise<ExistingEntry[]> {
+  const [postings, applications] = await Promise.all([
+    supabase.from('job_postings').select('id, company, role, job_url, job_description, application_id, dismissed_at'),
+    supabase
+      .from('applications')
+      .select('id, company, role, status, job_url, job_description')
+      .is('archived_at', null),
+  ]);
+  if (postings.error || applications.error) throw new Error('Daten ließen sich nicht laden.');
+  const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
+  return [
+    // Ist aus dem Stellenangebot schon eine Bewerbung geworden, reicht der Treffer bei der Bewerbung
+    ...postings.data
+      .filter((row) => !row.application_id)
+      .map((row) => ({
+        id: row.id as string,
+        company: row.company as string,
+        role: row.role as string,
+        jobUrl: text(row.job_url),
+        jobDescription: text(row.job_description),
+        label: row.dismissed_at ? 'Stellenangebot · verworfen' : 'Stellenangebot',
+      })),
+    ...applications.data.map((row) => ({
+      id: row.id as string,
+      company: row.company as string,
+      role: row.role as string,
+      jobUrl: text(row.job_url),
+      jobDescription: text(row.job_description),
+      label: `Bewerbung · ${STATUS_LABELS[row.status as string] ?? row.status}`,
+    })),
+  ];
 }
 
-/** Legt die Bewerbung mit Status „Gemerkt“ an, dazu den Ansprechpartner aus der Anzeige */
+/** Speichert die Anzeige als Stellenangebot – noch keine Bewerbung (Tabelle `job_postings`) */
 export async function saveJob(draft: JobDraft) {
   const { data, error } = await supabase
-    .from('applications')
-    .insert(toApplicationColumns(draft, today()))
+    .from('job_postings')
+    .insert(toPostingColumns(draft))
     .select('id')
     .single();
-  if (error) throw new Error('Die Stelle ließ sich nicht speichern. Bitte noch einmal versuchen.');
-  const contact = draft.contactName?.trim();
-  if (contact) {
-    // Ein fehlender Kontakt ist kein Grund, das Merken scheitern zu lassen
-    await supabase
-      .from('contacts')
-      .insert({ application_id: data.id, name: contact, email: draft.contactEmail?.trim() || null });
-  }
+  if (error) throw new Error('Das Stellenangebot ließ sich nicht speichern. Bitte noch einmal versuchen.');
   return data.id as string;
 }
 

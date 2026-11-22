@@ -12,7 +12,7 @@ import {
   postingText,
   stripBoardChrome,
   sourceFromUrl,
-  toApplicationColumns,
+  toPostingColumns,
   today,
   validateDraft,
   type JobDraft,
@@ -258,26 +258,30 @@ describe('Hilfen', () => {
     expect(validateDraft({ ...draft, company: 'A', salaryMin: Number.NaN }).salary).toMatch(/Zahl/);
   });
 
-  it('baut die Zeile für applications', () => {
+  it('baut die Zeile für job_postings', () => {
     expect(today(new Date(2026, 10, 3, 23, 30))).toBe('2026-11-03');
     expect(
-      toApplicationColumns(
-        { company: ' Acme ', role: 'Dev', location: '', jobUrl: 'https://a.de', jobDescription: ' ', source: '' },
-        '2026-11-21',
-      ),
+      toPostingColumns({
+        company: ' Acme ',
+        role: 'Dev',
+        location: '',
+        jobUrl: 'https://a.de',
+        jobDescription: ' ',
+        source: '',
+        contactName: ' Frau Muster ',
+      }),
     ).toEqual({
       company: 'Acme',
       role: 'Dev',
       location: '',
       work_mode: null,
-      applied_at: '2026-11-21',
-      status: 'saved',
-      priority: 'normal',
       source: null,
       job_url: 'https://a.de',
       salary_min: null,
       salary_max: null,
       job_description: null,
+      contact_name: 'Frau Muster',
+      contact_email: null,
     });
   });
 });

@@ -394,7 +394,7 @@ export function sourceFromUrl(url: string): string | undefined {
   return KNOWN_SOURCES.find(([pattern]) => pattern.test(host))?.[1] ?? host;
 }
 
-/** Kalendertag (YYYY-MM-DD) in lokaler Zeit – bei „Gemerkt“ der Tag des Merkens */
+/** Kalendertag (YYYY-MM-DD) in lokaler Zeit */
 export function today(now = new Date()) {
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
@@ -425,20 +425,19 @@ export function validateDraft(draft: JobDraft): DraftErrors {
   return errors;
 }
 
-/** Spalten für `applications` (Status „Gemerkt“); `user_id` und `id` setzt die Datenbank */
-export function toApplicationColumns(draft: JobDraft, appliedAt: string) {
+/** Spalten für `job_postings` (Stellenangebot, noch keine Bewerbung); `user_id`, `id` setzt die Datenbank */
+export function toPostingColumns(draft: JobDraft) {
   return {
     company: draft.company.trim(),
     role: draft.role.trim(),
     location: draft.location.trim(),
     work_mode: draft.workMode ?? null,
-    applied_at: appliedAt,
-    status: 'saved' as const,
-    priority: 'normal' as const,
     source: draft.source?.trim() || null,
     job_url: draft.jobUrl || null,
     salary_min: draft.salaryMin ?? null,
     salary_max: draft.salaryMax ?? null,
     job_description: draft.jobDescription.trim() || null,
+    contact_name: draft.contactName?.trim() || null,
+    contact_email: draft.contactEmail?.trim() || null,
   };
 }

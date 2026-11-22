@@ -1,8 +1,9 @@
 # jobpilot – Browser-Extension
 
-Merkt interessante Stellenanzeigen mit einem Klick in jobpilot. Die Stelle landet als Bewerbung mit
-Status „Gemerkt“ in der zentralen Supabase-Datenbank (`../backend`) und erscheint damit sofort in
-mobile-app, web-app und desktop-app.
+Merkt interessante Stellenanzeigen mit einem Klick in jobpilot. Die Anzeige landet als
+**Stellenangebot** (Tabelle `job_postings`, noch keine Bewerbung) in der zentralen
+Supabase-Datenbank (`../backend`) und erscheint in den Apps unter „Stellenangebote“ – bisher in der
+desktop-app; dort wird daraus bei Bedarf eine Bewerbung.
 
 ## Ablauf
 
@@ -19,12 +20,13 @@ mobile-app, web-app und desktop-app.
      Seitenaufbau, greift wieder der Hauptbereich bzw. die KI – dann die Selektoren anpassen;
    - fehlt etwas, auf Wunsch **mit KI** über die Edge Function `job-import` mit dem eigenen KI-Key
      (Zustimmung `ai.consent` wie in den Apps). Markierter Text hat Vorrang vor dem ganzen Seitentext.
-3. Vorschau prüfen, ggf. korrigieren, „Stelle merken“. Ist die Stelle schon erfasst – gleiche
+3. Vorschau prüfen, ggf. korrigieren, „Stellenangebot speichern“. Ist die Stelle schon erfasst (als
+   Stellenangebot oder Bewerbung) – gleiche
    Adresse, gleiche Firma + Position oder gleiche Firma mit fast gleichem Anzeigentext
    (`lib/duplicates.ts`, Kopie von `desktop-app/src/domain/duplicates.ts`) –, erscheint ein Hinweis
    statt einer Dublette.
 
-Den Anzeigentext speichert die Extension in `applications.job_description` – Grundlage für den
+Den Anzeigentext speichert die Extension in `job_postings.job_description` – Grundlage für den
 geplanten Zuschnitt des Lebenslaufs auf eine Stelle.
 
 ## Aufbau
