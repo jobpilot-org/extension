@@ -25,6 +25,7 @@ import {
   giveAiConsent,
   hasAiConsent,
   importJob,
+  attachSource,
   saveJob,
   signIn,
   supabase,
@@ -171,7 +172,18 @@ type Step =
   | { kind: 'reading' }
   | { kind: 'error'; message: string }
   | { kind: 'form'; base: JobDraft; existing: ExistingEntry[] }
-  | { kind: 'saved'; company: string; role: string };
+  | { kind: 'saved'; company: string; role: string; attachedTo?: string };
+
+/**
+ * Treffer der Dublettenprüfung: dieselbe Stelle als Stellenangebot oder Bewerbung – bei
+ * Stellenangeboten auch „gleiche Firma, andere Anzeige“, damit sich z. B. die Firmenseite als
+ * Quelle an die Anzeige von Indeed hängen lässt.
+ */
+function relevantMatches(draft: JobDraft, existing: ExistingEntry[]) {
+  return findDuplicates(draft, existing, undefined, { sameCompany: true }).filter(
+    (match) => match.reason !== 'company' || match.item.type === 'posting',
+  );
+}
 
 /** Stelle aus dem aktiven Tab lesen, prüfen lassen und als Stellenangebot speichern */
 function Capture() {
@@ -194,7 +206,7 @@ function Capture() {
         if (!active) return;
         setForm(toForm(draft));
         setStep({ kind: 'form', base: draft, existing });
-        const matches = findDuplicates(draft, existing);
+        const matches = relevantMatches(draft, existing);
         if (matches.length) setDuplicates(matches);
       } catch (e) {
         if (active) setStep({ kind: 'error', message: message(e) });
@@ -223,14 +235,15 @@ function Capture() {
     return (
       <div className="popup-body">
         <div className="jp-callout">
-          <p className="jp-eyebrow">Gespeichert ✓</p>
+          <p className="jp-eyebrow">{step.attachedTo ? 'Quelle ergänzt ✓' : 'Gespeichert ✓'}</p>
           <p>
             <strong>{step.company}</strong> · {step.role}
           </p>
         </div>
         <p className="jp-muted">
-          Das Stellenangebot steht jetzt in jobpilot unter „Stellenangebote“. Wenn du dich bewirbst,
-          machst du dort eine Bewerbung daraus.
+          {step.attachedTo
+            ? 'Diese Seite ist jetzt eine weitere Quelle des Stellenangebots. Angaben der Firmenseite haben Vorrang; Abweichungen siehst du in jobpilot im Stellenangebot.'
+            : 'Das Stellenangebot steht jetzt in jobpilot unter „Stellenangebote“. Wenn du dich bewirbst, machst du dort eine Bewerbung daraus.'}
         </p>
         <button type="button" className="jp-button" onClick={() => window.close()}>
           Schließen
@@ -278,7 +291,7 @@ function Capture() {
     if (Object.keys(found).length) return;
     // Erneut prüfen – Firma oder Stelle können im Formular geändert worden sein
     if (!confirmed) {
-      const matches = findDuplicates(draft, existing);
+      const matches = relevantMatches(draft, existing);
       if (matches.length) {
         setDuplicates(matches);
         return;
@@ -297,6 +310,24 @@ function Capture() {
     }
   }
 
+  async function attach(item: ExistingEntry) {
+    setSaving(true);
+    setSaveError(undefined);
+    try {
+      const draft = toDraft(form!, base);
+      const contact = ai.kind === 'done' ? mergeJobImport(base, ai.job) : base;
+      await attachSource(item.id, {
+        ...draft,
+        contactName: contact.contactName,
+        contactEmail: contact.contactEmail,
+      });
+      setStep({ kind: 'saved', company: item.company, role: item.role, attachedTo: item.label });
+    } catch (e) {
+      setSaveError(message(e));
+      setSaving(false);
+    }
+  }
+
   if (duplicates && !confirmed) {
     return (
       <div className="popup-body">
@@ -308,21 +339,34 @@ function Capture() {
               : `Diese Stelle ist vermutlich schon ${duplicates.length}-mal erfasst:`}
           </p>
           {duplicates.map(({ item, reason }) => (
-            <p key={item.id} className="popup-small">
-              <strong>
-                {item.company} · {item.role}
-              </strong>
-              <br />
-              {item.label} · {DUPLICATE_REASON_LABELS[reason]}
-            </p>
+            <div key={item.id} className="popup-match">
+              <p className="popup-small">
+                <strong>
+                  {item.company} · {item.role}
+                </strong>
+                <br />
+                {item.label} · {DUPLICATE_REASON_LABELS[reason]}
+              </p>
+              {item.type === 'posting' && reason !== 'url' && (
+                <button
+                  type="button"
+                  className="jp-button jp-button--compact"
+                  disabled={saving}
+                  onClick={() => void attach(item)}
+                >
+                  Als {base.kind === 'company' ? 'Firmenseite' : 'Quelle'} hinzufügen
+                </button>
+              )}
+            </div>
           ))}
         </div>
+        {saveError && <p className="jp-error">{saveError}</p>}
         <button
           type="button"
           className="jp-button jp-button--secondary"
           onClick={() => setConfirmed(true)}
         >
-          Trotzdem speichern
+          Als neues Stellenangebot speichern
         </button>
         <button type="button" className="jp-button" onClick={() => window.close()}>
           Schließen

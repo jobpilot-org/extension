@@ -13,6 +13,9 @@ import {
   stripBoardChrome,
   sourceFromUrl,
   toPostingColumns,
+  toSourceColumns,
+  sourceKind,
+  chooseApplyEmail,
   today,
   validateDraft,
   type JobDraft,
@@ -91,6 +94,9 @@ describe('draftFromPage', () => {
       source: 'StepStone',
       jobUrl: 'https://www.stepstone.de/stellenangebote--123.html?id=5',
       jobDescription: htmlToText(description),
+      kind: 'portal',
+      applyEmail: undefined,
+      applyUrl: undefined,
     });
     expect(isComplete(draft)).toBe(true);
   });
@@ -182,6 +188,7 @@ describe('mergeJobImport', () => {
       salaryMax: 70000,
       jobUrl: 'https://x.de',
       jobDescription: 'Text',
+      kind: 'portal',
     };
     expect(mergeJobImport(draft, job)).toEqual({
       ...draft,
@@ -250,7 +257,7 @@ describe('Hilfen', () => {
   });
 
   it('prüft den Entwurf', () => {
-    const draft: JobDraft = { company: ' ', role: 'Dev', location: '', jobUrl: '', jobDescription: '' };
+    const draft: JobDraft = { company: ' ', role: 'Dev', location: '', jobUrl: '', jobDescription: '', kind: 'company' };
     expect(validateDraft(draft)).toEqual({ company: 'Bitte die Firma angeben.' });
     expect(
       validateDraft({ ...draft, company: 'A', salaryMin: 80000, salaryMax: 60000 }).salary,
@@ -269,6 +276,7 @@ describe('Hilfen', () => {
         jobDescription: ' ',
         source: '',
         contactName: ' Frau Muster ',
+        kind: 'company',
       }),
     ).toEqual({
       company: 'Acme',
@@ -282,6 +290,8 @@ describe('Hilfen', () => {
       job_description: null,
       contact_name: 'Frau Muster',
       contact_email: null,
+      apply_email: null,
+      apply_url: null,
     });
   });
 });
@@ -327,5 +337,62 @@ describe('stripBoardChrome', () => {
     expect(postingText(page({ text: indeed }))).toMatch(/^Kurzbeschreibung der Stelle/);
     const selection = `Mit Indeed bewerben\n${'Markiert '.repeat(20)}`;
     expect(postingText(page({ text: indeed, selection }))).toBe(selection.trim());
+  });
+});
+
+describe('Quelle und Bewerbungsweg', () => {
+  it('unterscheidet Jobportal und Firmenseite', () => {
+    expect(sourceKind('https://de.indeed.com/viewjob?jk=1')).toBe('portal');
+    expect(sourceKind('https://www.stepstone.de/x')).toBe('portal');
+    expect(sourceKind('https://www.linkedin.com/jobs/view/1/')).toBe('portal');
+    expect(sourceKind('https://simple-first.de/stellenangebote/ki')).toBe('company');
+    expect(sourceKind('kaputt')).toBe('portal');
+  });
+
+  it('nimmt nur Adressen, die nach Bewerbung aussehen', () => {
+    expect(chooseApplyEmail(['info@firma.de', 'Bewerbung@Simple-First.de'])).toBe('bewerbung@simple-first.de');
+    expect(chooseApplyEmail(['karriere@firma.de'])).toBe('karriere@firma.de');
+    expect(chooseApplyEmail(['info@firma.de', 'datenschutz@firma.de'])).toBeUndefined();
+  });
+
+  it('übernimmt Bewerbungslink und -adresse von der Firmenseite', () => {
+    const { draft } = draftFromPage(
+      page({
+        url: 'https://simple-first.de/stellenangebote/ki',
+        applyLinks: ['https://simple-first.de/stellenangebote/ki', 'https://simple-first.de/bewerben?job=ki'],
+        emails: ['info@simple-first.de', 'bewerbung@simple-first.de'],
+        hints: { title: 'KI- & Digitalisierungsberater (m/w/d)', company: 'Simple First' },
+      }),
+    );
+    expect(draft).toMatchObject({
+      kind: 'company',
+      applyUrl: 'https://simple-first.de/bewerben?job=ki',
+      applyEmail: 'bewerbung@simple-first.de',
+    });
+  });
+
+  it('baut die Zeile für job_posting_sources', () => {
+    expect(
+      toSourceColumns(
+        {
+          company: 'Simple First',
+          role: 'Berater',
+          location: '',
+          jobUrl: 'https://simple-first.de/x',
+          jobDescription: 'Text',
+          kind: 'company',
+          contactName: 'Julia Illgner',
+          applyEmail: 'bewerbung@simple-first.de',
+        },
+        'p1',
+      ),
+    ).toMatchObject({
+      posting_id: 'p1',
+      kind: 'company',
+      url: 'https://simple-first.de/x',
+      location: null,
+      contact_name: 'Julia Illgner',
+      apply_email: 'bewerbung@simple-first.de',
+    });
   });
 });

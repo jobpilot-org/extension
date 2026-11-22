@@ -75,3 +75,19 @@ describe('readPage ohne gesonderte Beschreibung', () => {
     expect(snapshot.hints?.title).toBe('Dev');
   });
 });
+
+describe('readPage: Bewerbungsweg', () => {
+  it('findet „Jetzt bewerben“-Links und E-Mail-Adressen', () => {
+    document.body.innerHTML = `
+      <main>
+        <p>${'Text '.repeat(120)}</p>
+        <p>Deine Ansprechpartnerin Julia Illgner, bewerbung@simple-first.de</p>
+        <a href="https://simple-first.de/bewerben?job=ki">Jetzt bewerben</a>
+        <a href="https://simple-first.de/kontakt">Kontakt</a>
+        <a href="mailto:info@simple-first.de">Mail</a>
+      </main>`;
+    const snapshot = readPage(SITE_SELECTORS);
+    expect(snapshot.applyLinks).toEqual(['https://simple-first.de/bewerben?job=ki']);
+    expect(snapshot.emails).toEqual(['info@simple-first.de', 'bewerbung@simple-first.de']);
+  });
+});

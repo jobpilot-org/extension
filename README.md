@@ -26,6 +26,11 @@ desktop-app; dort wird daraus bei Bedarf eine Bewerbung.
    (`lib/duplicates.ts`, Kopie von `desktop-app/src/domain/duplicates.ts`) –, erscheint ein Hinweis
    statt einer Dublette.
 
+Dieselbe Stelle auf Portal und Firmenseite: Erkennt die Extension die Firma wieder, bietet sie
+„Als Firmenseite/Quelle hinzufügen“ an – die Seite landet als weitere Quelle in
+`job_posting_sources`, die Angaben der Firmenseite haben Vorrang. Bewerbungslinks („Jetzt
+bewerben“) und Bewerbungs-E-Mails werden mitgelesen.
+
 Den Anzeigentext speichert die Extension in `job_postings.job_description` – Grundlage für den
 geplanten Zuschnitt des Lebenslaufs auf eine Stelle.
 

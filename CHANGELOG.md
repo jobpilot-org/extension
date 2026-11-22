@@ -4,6 +4,13 @@ Versionen nach [SemVer](https://semver.org/lang/de/): neue Funktion → MINOR, F
 PATCH. Unter 1.0 noch nicht offiziell veröffentlicht. Die Version steht in `package.json` (WXT
 übernimmt sie ins Manifest) und oben rechts im Popup.
 
+## 0.5.0 – 2026-11-22
+
+- Gleiche Firma, andere Anzeige (z. B. Indeed und Firmenseite): „Als Firmenseite hinzufügen“ hängt
+  die Seite als weitere Quelle an das vorhandene Stellenangebot statt eine Dublette anzulegen –
+  auch bei anderer Schreibweise der Firma („Simple First“ / „Simple First Consulting GmbH“).
+- Erkennt Jobportal oder Firmenseite und liest „Jetzt bewerben“-Links und Bewerbungs-E-Mails.
+
 ## 0.4.0 – 2026-11-22
 
 - Eine gemerkte Anzeige ist jetzt ein **Stellenangebot**, keine Bewerbung mehr: Sie landet in

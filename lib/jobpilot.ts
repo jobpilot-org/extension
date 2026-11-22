@@ -2,7 +2,13 @@ import { createClient, FunctionsHttpError } from '@supabase/supabase-js';
 import { browser } from 'wxt/browser';
 
 import type { DuplicateTarget } from './duplicates';
-import { parseJobImport, toPostingColumns, type JobDraft, type JobImport } from './job-posting';
+import {
+  parseJobImport,
+  toPostingColumns,
+  toSourceColumns,
+  type JobDraft,
+  type JobImport,
+} from './job-posting';
 
 // Zugriff auf die zentrale Supabase-Datenbank (backend/). Standard ist das gehostete Projekt `dev`;
 // eine andere Instanz (z. B. die lokale) über WXT_SUPABASE_URL und WXT_SUPABASE_PUBLISHABLE_KEY in
@@ -45,21 +51,33 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 /** Vorhandener Eintrag für die Dublettenprüfung, mit Anzeigetext wie „Bewerbung · Beworben“ */
-export type ExistingEntry = DuplicateTarget & { label: string };
+export type ExistingEntry = DuplicateTarget & {
+  type: 'posting' | 'application';
+  label: string;
+};
 
 /**
  * Stellenangebote und nicht gelöschte Bewerbungen des Nutzers – dieselbe Stelle kann schon als das
  * eine oder das andere erfasst sein.
  */
 export async function listExisting(): Promise<ExistingEntry[]> {
-  const [postings, applications] = await Promise.all([
+  const [postings, applications, sources] = await Promise.all([
     supabase.from('job_postings').select('id, company, role, job_url, job_description, application_id, dismissed_at'),
     supabase
       .from('applications')
       .select('id, company, role, status, job_url, job_description')
       .is('archived_at', null),
+    supabase.from('job_posting_sources').select('posting_id, url'),
   ]);
-  if (postings.error || applications.error) throw new Error('Daten ließen sich nicht laden.');
+  if (postings.error || applications.error || sources.error) {
+    throw new Error('Daten ließen sich nicht laden.');
+  }
+  // Alle Adressen eines Stellenangebots (Portal und Firmenseite) zählen für die Dublettenprüfung
+  const urlsByPosting = new Map<string, string[]>();
+  for (const row of sources.data) {
+    if (!row.url) continue;
+    urlsByPosting.set(row.posting_id as string, [...(urlsByPosting.get(row.posting_id as string) ?? []), row.url as string]);
+  }
   const text = (value: unknown) => (typeof value === 'string' && value ? value : undefined);
   return [
     // Ist aus dem Stellenangebot schon eine Bewerbung geworden, reicht der Treffer bei der Bewerbung
@@ -71,6 +89,8 @@ export async function listExisting(): Promise<ExistingEntry[]> {
         role: row.role as string,
         jobUrl: text(row.job_url),
         jobDescription: text(row.job_description),
+        otherUrls: urlsByPosting.get(row.id as string) ?? [],
+        type: 'posting' as const,
         label: row.dismissed_at ? 'Stellenangebot · verworfen' : 'Stellenangebot',
       })),
     ...applications.data.map((row) => ({
@@ -79,12 +99,16 @@ export async function listExisting(): Promise<ExistingEntry[]> {
       role: row.role as string,
       jobUrl: text(row.job_url),
       jobDescription: text(row.job_description),
+      type: 'application' as const,
       label: `Bewerbung · ${STATUS_LABELS[row.status as string] ?? row.status}`,
     })),
   ];
 }
 
-/** Speichert die Anzeige als Stellenangebot – noch keine Bewerbung (Tabelle `job_postings`) */
+/**
+ * Speichert die Anzeige als neues Stellenangebot – noch keine Bewerbung (Tabelle `job_postings`) –
+ * mit dieser Seite als erster Quelle.
+ */
 export async function saveJob(draft: JobDraft) {
   const { data, error } = await supabase
     .from('job_postings')
@@ -92,7 +116,17 @@ export async function saveJob(draft: JobDraft) {
     .select('id')
     .single();
   if (error) throw new Error('Das Stellenangebot ließ sich nicht speichern. Bitte noch einmal versuchen.');
+  await attachSource(data.id as string, draft);
   return data.id as string;
+}
+
+/**
+ * Hängt diese Seite als weitere Quelle an ein vorhandenes Stellenangebot – z. B. die Firmenseite zur
+ * Anzeige von Indeed. Die Eckdaten leitet die Datenbank neu ab (Firmenseite zuerst).
+ */
+export async function attachSource(postingId: string, draft: JobDraft) {
+  const { error } = await supabase.from('job_posting_sources').insert(toSourceColumns(draft, postingId));
+  if (error) throw new Error('Die Quelle ließ sich nicht speichern. Bitte noch einmal versuchen.');
 }
 
 // Zustimmung zur KI-Nutzung – dieselbe Einstellung wie in den Apps (`settings`, Schlüssel ai.consent)

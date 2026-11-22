@@ -31,6 +31,10 @@ export type PageSnapshot = {
   text: string;
   /** Eckdaten aus bekannten Elementen der Jobbörse (siehe `SITE_SELECTORS`), soweit gefunden */
   hints?: PageHints;
+  /** Ziele von Links wie „Jetzt bewerben“ (absolute http(s)-Adressen) */
+  applyLinks?: string[];
+  /** E-Mail-Adressen aus mailto-Links und dem Text der Anzeige */
+  emails?: string[];
 };
 
 export type PageHints = { title?: string; company?: string; location?: string };
@@ -95,7 +99,13 @@ export type JobDraft = {
   jobDescription: string;
   contactName?: string;
   contactEmail?: string;
+  /** Jobportal oder Firmenseite – auf der Firmenseite stehen meist Ansprechpartner und Bewerbungsweg */
+  kind: SourceKind;
+  applyEmail?: string;
+  applyUrl?: string;
 };
+
+export type SourceKind = 'portal' | 'company';
 
 /** Antwort der Edge Function `job-import` */
 export type JobImport = {
@@ -263,6 +273,8 @@ export function draftFromJobPosting(posting: Json, url: string): JobDraft {
     source: sourceFromUrl(url),
     jobUrl: normalizeJobUrl(url),
     jobDescription: typeof posting.description === 'string' ? htmlToText(posting.description) : '',
+    kind: sourceKind(url),
+    applyEmail: isObject(posting.applicationContact) ? text(posting.applicationContact.email) || undefined : undefined,
   };
 }
 
@@ -281,16 +293,22 @@ export function emptyDraft(snapshot: PageSnapshot): JobDraft {
     source: sourceFromUrl(snapshot.url),
     jobUrl: normalizeJobUrl(snapshot.url),
     jobDescription: postingText(snapshot),
+    kind: sourceKind(snapshot.url),
   };
 }
 
 /** Entwurf aus der Seite: mit `JobPosting`, sonst leer mit dem Anzeigentext */
 export function draftFromPage(snapshot: PageSnapshot): { draft: JobDraft; structured: boolean } {
   const posting = findJobPosting(snapshot.jsonLd);
-  if (!posting) return { draft: emptyDraft(snapshot), structured: false };
-  const draft = draftFromJobPosting(posting, snapshot.url);
-  if (draft.jobDescription.length < MIN_POSTING_CHARS) draft.jobDescription = postingText(snapshot);
-  return { draft, structured: true };
+  const structured = !!posting;
+  const draft = posting ? draftFromJobPosting(posting, snapshot.url) : emptyDraft(snapshot);
+  if (posting && draft.jobDescription.length < MIN_POSTING_CHARS) {
+    draft.jobDescription = postingText(snapshot);
+  }
+  // Bewerbungsweg: „Jetzt bewerben“-Link und Bewerbungs-E-Mail aus der Seite
+  draft.applyUrl ??= snapshot.applyLinks?.find((link) => normalizeJobUrl(link) !== draft.jobUrl);
+  draft.applyEmail ??= chooseApplyEmail(snapshot.emails ?? []);
+  return { draft, structured };
 }
 
 /** Überschrift, nach der bei Jobbörsen die eigentliche Beschreibung beginnt */
@@ -425,6 +443,25 @@ export function validateDraft(draft: JobDraft): DraftErrors {
   return errors;
 }
 
+const PORTAL_HOST =
+  /(^|\.)(indeed|stepstone|linkedin|xing|monster|jobware|arbeitsagentur|glassdoor|kununu|stellenanzeigen|jobs|meinestadt|kimeta|jooble|absolventa|get-in-it|heise|stellenwerk)\./;
+
+/** Jobportal oder Firmenseite – unbekannte Seiten gelten als Firmenseite */
+export function sourceKind(url: string): SourceKind {
+  try {
+    return PORTAL_HOST.test(new URL(url).hostname.toLowerCase()) ? 'portal' : 'company';
+  } catch {
+    return 'portal';
+  }
+}
+
+const APPLY_MAIL = /(bewerb|karriere|career|jobs?@|recruit|personal|hr@|talent)/i;
+
+/** Bewerbungsadresse: nur E-Mails, die danach aussehen (keine info@, datenschutz@ o. Ä.) */
+export function chooseApplyEmail(emails: readonly string[]): string | undefined {
+  return emails.map((e) => e.trim().toLowerCase()).find((e) => /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(e) && APPLY_MAIL.test(e));
+}
+
 /** Spalten für `job_postings` (Stellenangebot, noch keine Bewerbung); `user_id`, `id` setzt die Datenbank */
 export function toPostingColumns(draft: JobDraft) {
   return {
@@ -439,5 +476,30 @@ export function toPostingColumns(draft: JobDraft) {
     job_description: draft.jobDescription.trim() || null,
     contact_name: draft.contactName?.trim() || null,
     contact_email: draft.contactEmail?.trim() || null,
+    apply_email: draft.applyEmail?.trim() || null,
+    apply_url: draft.applyUrl || null,
+  };
+}
+
+/** Spalten für `job_posting_sources` – die Datenbank leitet daraus die Eckdaten des Stellenangebots ab */
+export function toSourceColumns(draft: JobDraft, postingId: string) {
+  const { company, role, location, work_mode, source, job_url, salary_min, salary_max, job_description, contact_name, contact_email, apply_email, apply_url } =
+    toPostingColumns(draft);
+  return {
+    posting_id: postingId,
+    kind: draft.kind,
+    source,
+    url: job_url,
+    company,
+    role,
+    location: location || null,
+    work_mode,
+    salary_min,
+    salary_max,
+    job_description,
+    contact_name,
+    contact_email,
+    apply_email,
+    apply_url,
   };
 }

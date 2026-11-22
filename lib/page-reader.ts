@@ -51,6 +51,22 @@ export function readPage(selectors: SiteSelectors): PageSnapshot {
       company: first(root, selectors.company),
       location: first(root, selectors.location),
     },
+    // Bewerbungsweg: Links wie „Jetzt bewerben“ und E-Mail-Adressen (mailto und im Text)
+    applyLinks: Array.from(root.querySelectorAll('a[href]'))
+      .filter((a) =>
+        /jetzt bewerben|online bewerben|bewerbung starten|zur bewerbung|hier bewerben|apply now|apply online/i.test(
+          (a as HTMLElement).innerText ?? a.textContent ?? '',
+        ),
+      )
+      .map((a) => (a as HTMLAnchorElement).href)
+      .filter((href) => /^https?:/i.test(href))
+      .slice(0, 5),
+    emails: [
+      ...Array.from(document.querySelectorAll('a[href^="mailto:"]'), (a) =>
+        decodeURIComponent((a as HTMLAnchorElement).href.slice(7).split('?')[0] ?? ''),
+      ),
+      ...(text.match(/[\w.+-]+@[\w-]+(\.[\w-]+)+/g) ?? []),
+    ].slice(0, 20),
   };
 }
 

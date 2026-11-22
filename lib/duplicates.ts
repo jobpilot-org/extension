@@ -11,7 +11,7 @@ export type DuplicateCandidate = {
   jobDescription?: string;
 };
 
-export type DuplicateReason = 'url' | 'company-role' | 'company-description';
+export type DuplicateReason = 'url' | 'company-role' | 'company-description' | 'company';
 
 /** Was die Prüfung von einem vorhandenen Eintrag (Bewerbung oder Stellenangebot) braucht */
 export type DuplicateTarget = {
@@ -20,6 +20,8 @@ export type DuplicateTarget = {
   role: string;
   jobUrl?: string;
   jobDescription?: string;
+  /** Weitere Adressen derselben Stelle, z. B. die Quellen eines Stellenangebots */
+  otherUrls?: readonly string[];
 };
 
 export type DuplicateMatch<T extends DuplicateTarget = DuplicateTarget> = {
@@ -31,6 +33,7 @@ export const DUPLICATE_REASON_LABELS: Record<DuplicateReason, string> = {
   url: 'gleiche Anzeige (Adresse)',
   'company-role': 'gleiche Firma und Position',
   'company-description': 'gleiche Firma, fast gleicher Anzeigentext',
+  company: 'gleiche Firma, andere Anzeige',
 };
 
 const TRACKING_PARAM = /^(utm_|trk|ref|refid|tracking|src$|source$|campaign|gclid|fbclid|mc_)/i;
@@ -96,6 +99,22 @@ export function companyKey(company: string) {
     .trim();
 }
 
+/**
+ * Gleiche Firma? Auch, wenn ein Name den anderen enthält – „Simple First“ und „Simple First
+ * Consulting GmbH“ (Portale und Firmenseiten schreiben Namen oft verschieden).
+ */
+export function sameCompany(a: string, b: string) {
+  const left = companyKey(a);
+  const right = companyKey(b);
+  if (!left || !right) return false;
+  if (left === right) return true;
+  const [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  const words = new Set(longer.split(' '));
+  const needed = shorter.split(' ');
+  // Ein einzelnes kurzes Wort („ag“, „it“) reicht nicht
+  return needed.join('').length >= 4 && needed.every((word) => words.has(word));
+}
+
 /** „Senior Software & App Engineer (m/w/d)“ → „senior software app engineer“ */
 export function roleKey(role: string) {
   return fold(role)
@@ -135,20 +154,26 @@ export function findDuplicates<T extends DuplicateTarget>(
   candidate: DuplicateCandidate,
   existing: readonly T[],
   ignoreId?: string,
+  options: {
+    /** Auch „gleiche Firma, andere Anzeige“ melden – z. B. um eine Firmenseite als Quelle anzuhängen */
+    sameCompany?: boolean;
+  } = {},
 ): DuplicateMatch<T>[] {
   const url = candidate.jobUrl?.trim() ? urlKey(candidate.jobUrl) : undefined;
-  const company = companyKey(candidate.company);
   const role = roleKey(candidate.role);
   const text = candidate.jobDescription?.trim() ?? '';
-  const order: DuplicateReason[] = ['url', 'company-role', 'company-description'];
+  const order: DuplicateReason[] = ['url', 'company-role', 'company-description', 'company'];
   const matches: DuplicateMatch<T>[] = [];
 
   for (const item of existing) {
     if (item.id === ignoreId) continue;
     let reason: DuplicateReason | undefined;
-    if (url && item.jobUrl?.trim() && urlKey(item.jobUrl) === url) {
+    const urls = [item.jobUrl, ...(item.otherUrls ?? [])].filter(
+      (value): value is string => !!value?.trim(),
+    );
+    if (url && urls.some((value) => urlKey(value) === url)) {
       reason = 'url';
-    } else if (company && companyKey(item.company) === company) {
+    } else if (sameCompany(candidate.company, item.company)) {
       if (role && roleKey(item.role) === role) {
         reason = 'company-role';
       } else if (
@@ -157,6 +182,8 @@ export function findDuplicates<T extends DuplicateTarget>(
         textSimilarity(text, item.jobDescription!) >= SIMILAR_TEXT
       ) {
         reason = 'company-description';
+      } else if (options.sameCompany) {
+        reason = 'company';
       }
     }
     if (reason) matches.push({ item, reason });
