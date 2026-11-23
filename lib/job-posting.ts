@@ -3,16 +3,17 @@
 // `JobPosting` als JSON-LD, das viele Jobbörsen und Karriereseiten einbetten), sonst ergänzt um das
 // Ergebnis der Edge Function `job-import` (backend/supabase/functions/job-import).
 
+import { WORK_MODES, type AiResponse, type WorkMode } from '@jobpilot-org/shared-ai/assistant';
+import {
+  MAX_POSTING_CHARS,
+  MIN_POSTING_CHARS,
+} from '@jobpilot-org/shared-ai/features/job-import';
+
 import { normalizeJobUrl } from './duplicates';
 
-export { normalizeJobUrl };
+export { WORK_MODES, normalizeJobUrl };
+export type { WorkMode };
 
-/** Grenzen wie in der Edge Function `job-import` und `src/domain/ai.ts` der mobile-app */
-export const MIN_POSTING_CHARS = 80;
-export const MAX_POSTING_CHARS = 20_000;
-
-export const WORK_MODES = ['remote', 'hybrid', 'onsite'] as const;
-export type WorkMode = (typeof WORK_MODES)[number];
 export const WORK_MODE_LABELS: Record<WorkMode, string> = {
   remote: 'Remote',
   hybrid: 'Hybrid',
@@ -108,18 +109,7 @@ export type JobDraft = {
 export type SourceKind = 'portal' | 'company';
 
 /** Antwort der Edge Function `job-import` */
-export type JobImport = {
-  company: string;
-  role: string;
-  location: string;
-  workMode: WorkMode | null;
-  salaryMin: number | null;
-  salaryMax: number | null;
-  skills: string[];
-  contactName: string | null;
-  contactEmail: string | null;
-  summary: string;
-};
+export type JobImport = AiResponse<'stellenanzeige'>;
 
 type Json = Record<string, unknown>;
 

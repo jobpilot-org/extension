@@ -1,4 +1,6 @@
-import { createClient, FunctionsHttpError } from '@supabase/supabase-js';
+import { invokeAiFunction } from '@jobpilot-org/shared-ai/client/supabase';
+import { AiFunctionError, type AiFunctionErrorCode } from '@jobpilot-org/shared-ai/errors';
+import { createClient } from '@supabase/supabase-js';
 import { browser } from 'wxt/browser';
 
 import type { DuplicateTarget } from './duplicates';
@@ -142,7 +144,7 @@ export async function giveAiConsent() {
   if (error) throw new Error('Die Zustimmung ließ sich nicht speichern.');
 }
 
-const AI_MESSAGES: Record<string, string> = {
+const AI_MESSAGES: Record<AiFunctionErrorCode, string> = {
   unauthorized: 'Deine Anmeldung ist abgelaufen. Bitte melde dich neu an.',
   'missing-key':
     'Zum Auslesen per KI brauchst du einen eigenen KI-Key. Hinterlege ihn in einer jobpilot-App unter Einstellungen – oder fülle die Felder selbst aus.',
@@ -159,16 +161,11 @@ const AI_MESSAGES: Record<string, string> = {
 
 /** Liest die Eckdaten per Edge Function `job-import` (eigener KI-Key des Nutzers) */
 export async function importJob(posting: string, url: string): Promise<JobImport> {
-  const { data, error } = await supabase.functions.invoke<{ job: unknown }>('job-import', {
-    body: { posting, url },
-  });
-  if (error) {
-    let code = 'offline';
-    if (error instanceof FunctionsHttpError) {
-      const body = (await (error.context as Response).json().catch(() => null)) as { error?: string } | null;
-      code = body?.error && body.error in AI_MESSAGES ? body.error : 'unavailable';
-    }
-    throw new Error(AI_MESSAGES[code]);
+  let data: { job: unknown } | null;
+  try {
+    data = await invokeAiFunction<{ job: unknown }>(supabase, 'job-import', { posting, url });
+  } catch (error) {
+    throw error instanceof AiFunctionError ? new Error(AI_MESSAGES[error.code]) : error;
   }
   try {
     return parseJobImport(data?.job);
