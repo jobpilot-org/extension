@@ -58,3 +58,10 @@ npm run zip              # ZIP für den Chrome Web Store
 
 Supabase-Instanz über `.env` (`WXT_SUPABASE_URL`, `WXT_SUPABASE_PUBLISHABLE_KEY`, Vorlage
 `.env.example`); ohne `.env` das gehostete Projekt `dev`.
+
+`@jobpilot-org/shared-ai` und die Aufrufhilfe für `job-import` kommen aus GitHub Packages. Vor `npm install` ein GitHub-Token mit `read:packages` in die Umgebung laden (nie in eine Datei schreiben):
+
+```bash
+set -a; . ~/.config/jobpilot/github.env; set +a
+export NODE_AUTH_TOKEN="$GITHUB_PACKAGES_TOKEN"
+```

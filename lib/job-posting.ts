@@ -4,10 +4,7 @@
 // Ergebnis der Edge Function `job-import` (backend/supabase/functions/job-import).
 
 import { WORK_MODES, type AiResponse, type WorkMode } from '@jobpilot-org/shared-ai/assistant';
-import {
-  MAX_POSTING_CHARS,
-  MIN_POSTING_CHARS,
-} from '@jobpilot-org/shared-ai/features/job-import';
+import { MAX_POSTING_CHARS, MIN_POSTING_CHARS } from '@jobpilot-org/shared-ai/features/job-import';
 
 import { normalizeJobUrl } from './duplicates';
 
